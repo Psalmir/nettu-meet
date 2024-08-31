@@ -83,21 +83,19 @@ pipeline {
             steps {
                 script {
                     sh """
-                        curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" -H "Content-Type: application/json" \
-                        -d '{
-                        "engagement": null,
-                        "scan_type": "Semgrep",
-                        "file": "@${semgrepReport}"
-                        }' ${defectDojoUrl}import-scan/
+                        curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" \
+                        -F "engagement=null" \
+                        -F "scan_type=Semgrep" \
+                        -F "file=@${semgrepReport}" \
+                        ${defectDojoUrl}import-scan/
                     """
-
+                    
                     sh """
-                        curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" -H "Content-Type: application/json" \
-                        -d '{
-                            "engagement": null,
-                            "scan_type": "ZAP",
-                            "file": "@${zapshReport}"
-                        }' ${defectDojoUrl}import-scan/
+                        curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" \
+                        -F "engagement=null" \
+                        -F "scan_type=ZAP" \
+                        -F "file=@${zapshReport}" \
+                        ${defectDojoUrl}import-scan/
                     """
                 }
             }
