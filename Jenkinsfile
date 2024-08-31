@@ -1,19 +1,27 @@
 pipeline {
     agent any
+    environment {
+         semgrepReport = 'semgrep-report.json'
+     }
     stages {
         stage('SAST with Semgrep') {
-    agent {
-        label 'alpine'
-    }
+            agent {
+                label 'alpine'
+            }
 
-    steps {
-        script {
-            def semgrepReport = 'semgrep-report.json'
-            sh '''
-                apk update
-                apk add --no-cache python3 py3-pip
-                python3 -m pip install --no-cache-dir semgrep
-            '''
+            steps {
+                script {
+                        def semgrepReport = 'semgrep-report.json'
+                        sh '''
+                            apk update && apk add --no-cache python3 py3-pip py3-virtualenv
+                            python3 -m venv venv
+                            . venv/bin/activate
+                            pip install semgrep
+                        '''
+                    
+                }
+
+                  // Выполнение Semgrep и сохранение отчета
             try {
                 sh "semgrep ci --config auto --json > ${semgrepReport}"
             } catch (Exception e) {
@@ -21,7 +29,11 @@ pipeline {
                 currentBuild.result = 'FAILURE'
                 return
             }
+
+            // Перечисление файлов для проверки
             sh 'ls -lth'
+
+            // Сохранение отчета
             stash name: 'semgrep-report', includes: "${semgrepReport}"
             archiveArtifacts artifacts: "${semgrepReport}", allowEmptyArchive: true
         }
