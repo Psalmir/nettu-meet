@@ -99,6 +99,7 @@ pipeline {
                     python3 -m venv venv
                     . venv/bin/activate
                     pip install requests
+                    pip install dodjo  # Установка модуля dodjo
                     python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/semgrep.json "Semgrep JSON Report"
                     python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/owaspzap.json "ZAP Scan"
                 '''
