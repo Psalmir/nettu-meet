@@ -5,72 +5,86 @@ pipeline {
         defectDojoUrl = 'https://s410-exam.cyber-ed.space:8083/api/v2/'
         semgrepReport = 'semgrep-report.json'
         trivyReportDir = 'reports/'
-        dependencyTrackUrl = 'https://s410-exam.cyber-ed.space:8081/'
-        dependencyTrackApiKey = 'odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl'
-        projectName = 'psalmir'
-        projectVersion = '1.0'
-        projectDescription = 'Exam'
+        DEPENDENCY_TRACK_URL = 'https://s410-exam.cyber-ed.space:8081/'
+        DEPENDENCY_TRACK_API_KEY = 'odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl'
+        PROJECT_NAME = 'psalmir'
+        PROJECT_VERSION = '1.0'
+        PROJECT_DESCRIPTION = 'Exam'
      }
     stages {
-        stage('Semgrep') {
-            agent { label 'alpine' }
+        // stage('Semgrep') {
+        //     agent { label 'alpine' }
+        //     steps {
+        //         script {
+        //             try {
+        //                 sh '''
+        //                     apk update && apk add --no-cache python3 py3-pip py3-virtualenv
+        //                     python3 -m venv venv
+        //                     . venv/bin/activate
+        //                     pip install semgrep
+        //                     semgrep ci --config auto --json > ${semgrepReport}
+        //                 '''
+        //             } catch (Exception e) {
+        //                 echo 'Semgrep encountered issues.'
+        //             }
+        //         }
+        //         archiveArtifacts artifacts: "${semgrepReport}", allowEmptyArchive: true
+        //         stash name: 'semgrep-report', includes: "${semgrepReport}"
+        //     }
+        // } 
+        // stage('ZAP') {
+        //     agent { label 'alpine' }    
+        //     steps {
+        //         sh '''
+        //             curl -L -o ZAP_2.15.0_Linux.tar.gz https://github.com/zaproxy/zaproxy/releases/download/v2.15.0/ZAP_2.15.0_Linux.tar.gz
+        //             tar -xzf ZAP_2.15.0_Linux.tar.gz
+        //             ./ZAP_2.15.0/zap.sh -cmd -addonupdate -addoninstall wappalyzer -addoninstall pscanrulesBeta
+        //             ./ZAP_2.15.0/zap.sh -cmd -quickurl https://s410-exam.cyber-ed.space:8084 -quickout $(pwd)/zapsh-report.json
+        //         '''
+        //         archiveArtifacts artifacts: 'zapsh-report.json', allowEmptyArchive: true 
+        //         stash name: 'zapsh-report', includes: 'zapsh-report.json'
+        //     }            
+        // }
+        stage('SBOM') {
             steps {
                 script {
-                    try {
-                        sh '''
-                            apk update && apk add --no-cache python3 py3-pip py3-virtualenv
-                            python3 -m venv venv
-                            . venv/bin/activate
-                            pip install semgrep
-                            semgrep ci --config auto --json > ${semgrepReport}
-                        '''
-                    } catch (Exception e) {
-                        echo 'Semgrep encountered issues.'
-                    }
-                }
-                archiveArtifacts artifacts: "${semgrepReport}", allowEmptyArchive: true
-                stash name: 'semgrep-report', includes: "${semgrepReport}"
-            }
-        } 
-        stage('ZAP') {
-            agent { label 'alpine' }    
-            steps {
-                sh '''
-                    curl -L -o ZAP_2.15.0_Linux.tar.gz https://github.com/zaproxy/zaproxy/releases/download/v2.15.0/ZAP_2.15.0_Linux.tar.gz
-                    tar -xzf ZAP_2.15.0_Linux.tar.gz
-                    ./ZAP_2.15.0/zap.sh -cmd -addonupdate -addoninstall wappalyzer -addoninstall pscanrulesBeta
-                    ./ZAP_2.15.0/zap.sh -cmd -quickurl https://s410-exam.cyber-ed.space:8084 -quickout $(pwd)/zapsh-report.json
-                '''
-                archiveArtifacts artifacts: 'zapsh-report.json', allowEmptyArchive: true 
-                stash name: 'zapsh-report', includes: 'zapsh-report.json'
-            }            
-        }
-        stage ('SBOM') {
-          steps {
-            script {
-                sh '''
+                    sh '''
                     curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b ./bin
                     export PATH=$(pwd)/bin:$PATH
                     syft dir:$(pwd) -o cyclonedx-xml=bom.xml
-                    curl -k -X "PUT" "${dependencyTrackUrl}/api/v1/project" \
-                         -H "X-API-Key: ${dependencyTrackApiKey}" \
-                         -H "Content-Type: application/json" \
-                         -d '{
-                              "name": "${projectName}",
-                              "version": "${projectVersion}",
-                              "description": "${projectDescription}"
-                             }'
-                    curl -k -X "POST" "${dependencyTrackUrl}/api/v1/bom" \
-                         -H "Content-Type: multipart/form-data" \
-                         -H "X-Api-Key: ${dependencyTrackApiKey}" \
-                         -F "autoCreate=true" \
-                         -F "projectName=${projectName}" \
-                         -F "projectVersion=${projectVersion}" \
-                         -F "bom=@bom.xml"
-                '''
+                    cat bom.xml
+                    '''
+                    def createProjectResponse = sh(
+                        script: """
+                        curl -k -X "PUT" "${DEPENDENCY_TRACK_URL}/api/v1/project" \
+                             -H "X-API-Key: ${DEPENDENCY_TRACK_API_KEY}" \
+                             -H "Content-Type: application/json" \
+                             -d '{
+                                  "name": "${PROJECT_NAME}",
+                                  "version": "${PROJECT_VERSION}",
+                                  "description": "${PROJECT_DESCRIPTION}"
+                                 }'
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    echo "Create Project Response: ${createProjectResponse}"
+        
+                    def uploadSbomResponse = sh(
+                        script: """
+                        curl -k -X "POST" "${DEPENDENCY_TRACK_URL}/api/v1/bom" \
+                             -H "Content-Type: multipart/form-data" \
+                             -H "X-Api-Key: ${DEPENDENCY_TRACK_API_KEY}" \
+                             -F "autoCreate=true" \
+                             -F "projectName=${PROJECT_NAME}" \
+                             -F "projectVersion=${PROJECT_VERSION}" \
+                             -F "bom=@bom.xml"
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    echo "Upload SBOM Response: ${uploadSbomResponse}"
+                }
             }
         }
-      }
       stage('Trivy') {
             agent { label 'dind' }
             steps {
