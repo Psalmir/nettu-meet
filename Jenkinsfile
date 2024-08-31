@@ -4,6 +4,7 @@ pipeline {
          semgrepReport = 'semgrep-report.json'
      }
     stages {
+        stage('SAST with Semgrep') {
             agent {
                 label 'alpine'
             }
@@ -19,7 +20,7 @@ pipeline {
                             python3 -m venv venv
                             . venv/bin/activate
                             pip install semgrep
-                            semgrep ci --config auto --json > ${SEMGREP_REPORT}
+                            semgrep ci --config auto --json > ${semgrepReport}
                         '''
                     } catch (Exception e) {
                         echo 'Semgrep encountered issues.'
@@ -27,8 +28,8 @@ pipeline {
                 }
 
                 sh 'ls -lth'
-                stash name: 'semgrep-report', includes: "${SEMGREP_REPORT}"
-                archiveArtifacts artifacts: "${SEMGREP_REPORT}", allowEmptyArchive: true
+                stash name: 'semgrep-report', includes: "${semgrepReport}"
+                archiveArtifacts artifacts: "${semgrepReport}", allowEmptyArchive: true
             }
         } 
         stage('Run ZAP Scan') {
@@ -46,7 +47,5 @@ pipeline {
                 archiveArtifacts artifacts: 'zapsh-report.json', allowEmptyArchive: true         
             }            
         }      
+    }
 }
-
-
-
