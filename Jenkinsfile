@@ -87,24 +87,17 @@ pipeline {
             }
         }
         stage('Import Scans to Defect Dojo') {
-            agent {
-                label 'alpine'
-            }
             steps {
-                unstash 'semgrep-report'
-                unstash 'owaspzap-report'
-
-                sh '''
-                    apk update && apk add --no-cache python3 py3-pip py3-virtualenv
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install requests
-                    pip install dodjo  # Установка модуля dodjo
-                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/semgrep.json "Semgrep JSON Report"
-                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/owaspzap.json "ZAP Scan"
-                '''
+                    script {
+                       sh '''
+                            curl -X 'POST' -kL 'https://s410-exam.cyber-ed.space:8083/api/v2/import-scan/' -H 'accept: application/json' -H 'X-CSRFTOKEN: sKJFjyoAkK1wUqpb2yPFwoi1JE5CwbR4TvyGwPMsDrKRMLoMlZtnqMn7jTeLv4vE' -H 'Authorization: Token c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4' -H 'Content-Type: multipart/form-data' -F 'active=true' -F 'verified=true' -F'deduplication_on_engagement=true' -F 'minimum_severity=High' -F 'scan_date=2024-08-31' -F 'engagement_end_date=2024-08-31' -F 'group_by=component_name' -F 'tags=' -F 'product_name=Tim' -F 'file=@semgrep.json;type=application/json' -F 'auto_create_context=true' -F 'scan_type=Semgrep JSON Report' -F 'engagement=59'
+                            curl -X 'POST' -kL 'https://s410-exam.cyber-ed.space:8083/api/v2/import-scan/' -H 'accept: application/json' -H 'X-CSRFTOKEN: sKJFjyoAkK1wUqpb2yPFwoi1JE5CwbR4TvyGwPMsDrKRMLoMlZtnqMn7jTeLv4vE' -H 'Authorization: Token c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4' -H 'Content-Type: multipart/form-data' -F 'active=true' -F 'verified=true' -F'deduplication_on_engagement=true' -F 'minimum_severity=High' -F 'scan_date=2024-08-31' -F 'engagement_end_date=2024-08-31' -F 'group_by=component_name' -F 'tags=' -F 'product_name=Tim' -F 'file=@zap.json;type=application/json' -F 'auto_create_context=true' -F 'scan_type=ZAP Scan' -F 'engagement=60'
+                            curl -X 'POST' -kL 'https://s410-exam.cyber-ed.space:8083/api/v2/import-scan/' -H 'accept: application/json' -H 'X-CSRFTOKEN: sKJFjyoAkK1wUqpb2yPFwoi1JE5CwbR4TvyGwPMsDrKRMLoMlZtnqMn7jTeLv4vE' -H 'Authorization: Token c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4' -H 'Content-Type: multipart/form-data' -F 'active=true' -F 'verified=true' -F'deduplication_on_engagement=true' -F 'minimum_severity=High' -F 'scan_date=2024-08-31' -F 'engagement_end_date=2024-08-31' -F 'group_by=component_name' -F 'tags=' -F 'product_name=Tim' -F 'file=@depcheck.json;type=application/json' -F 'auto_create_context=true' -F 'scan_type=Dependency Check Scan' -F 'engagement=61'
+                            curl -X 'POST' -kL 'https://s410-exam.cyber-ed.space:8083/api/v2/import-scan/' -H 'accept: application/json' -H 'X-CSRFTOKEN: sKJFjyoAkK1wUqpb2yPFwoi1JE5CwbR4TvyGwPMsDrKRMLoMlZtnqMn7jTeLv4vE' -H 'Authorization: Token c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4' -H 'Content-Type: multipart/form-data' -F 'active=true' -F 'verified=true' -F'deduplication_on_engagement=true' -F 'minimum_severity=High' -F 'scan_date=2024-08-31' -F 'engagement_end_date=2024-08-31' -F 'group_by=component_name' -F 'tags=' -F 'product_name=Tim' -F 'file=@trivy.json;type=application/json' -F 'auto_create_context=true' -F 'scan_type=Trivy Scan' -F 'engagement=62'
+                            '''
+                    }
+                }
             }
-        }
         stage('Quality Gates') {
             agent {
                 label 'alpine'
