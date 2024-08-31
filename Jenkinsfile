@@ -31,19 +31,18 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.54.1
-                        trivy --version
-                        touch trivy_report.json
-                        trivy repo https://github.com/ElladaNuralieva/nettu-meet -f json -o trivy_report.json
-                        curl --insecure -X "POST" "https://s410-exam.cyber-ed.space:8081/api/v1/bom" \
-                         -H 'Content-Type: multipart/form-data' \
-                         -H 'X-Api-Key: odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl' \
-                         -F "project=e3ea797e-6dcb-4be3-9927-0e3320363109" \
-                         -F "bom=@trivy_report.json"
+                    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+                    echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+                    sudo apt update
+                    sudo apt install -y trivy
+                    mkdir -p reports
+                    cd server
+                    trivy fs --format cyclonedx -o ../reports/sbom.json package-lock.json
+                    trivy sbom -f json -o ../reports/trivy.json ../reports/sbom.json
                     '''
-                    archiveArtifacts artifacts: 'trivy_report.json', allowEmptyArchive: true
-                    // stash includes: 'reports/sbom.json', name: 'sbom'
-                    // stash includes: 'reports/trivy.json', name: 'trivy-report'
+                    archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
+                    stash includes: 'reports/sbom.json', name: 'sbom'
+                    stash includes: 'reports/trivy.json', name: 'trivy-report'
                 }
             }
         }
@@ -89,22 +88,24 @@ pipeline {
         // }
         stage('Import Scans to Defect Dojo') {
             steps {
-                    script {
-                       sh '''
-                        curl -X 'POST' -kL 'https://s410-exam.cyber-ed.space:8083/api/v2/import-scan/' \
-                        -H 'accept: application/json' \
-                        -H 'Authorization: Token c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4' \
-                        -H 'Content-Type: multipart/form-data' \
-                        -F 'active=true' \
-                        -F 'verified=true' \
-                        -F 'scan_type=Semgrep Scan' \
-                        -F 'product_name=psalmir' \
-                        -F 'file=@trivy_report.json' \
-                        -F 'engagement=50'                       
-                        '''
-                    }
+                script {
+                    unstash 'trivy-report'  // Извлекаем артефакт trivy.json
+        
+                    sh '''
+                    curl -X 'POST' -kL 'https://s410-exam.cyber-ed.space:8083/api/v2/import-scan/' \
+                    -H 'accept: application/json' \
+                    -H 'Authorization: Token c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4' \
+                    -H 'Content-Type: multipart/form-data' \
+                    -F 'active=true' \
+                    -F 'verified=true' \
+                    -F 'scan_type=Trivy Scan' \  # Измените на правильный тип сканирования
+                    -F 'product_name=psalmir' \
+                    -F 'file=@reports/trivy.json' \  # Убедитесь, что путь к файлу правильный
+                    -F 'engagement=50'                       
+                    '''
                 }
             }
+        }
         stage('Quality Gates') {
             agent {
                 label 'alpine'
