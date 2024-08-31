@@ -86,6 +86,24 @@ pipeline {
                 }
             }
         }
+        stage('Import Scans to Defect Dojo') {
+            agent {
+                label 'alpine'
+            }
+            steps {
+                unstash 'semgrep-report'
+                unstash 'owaspzap-report'
+
+                sh '''
+                    apk update && apk add --no-cache python3 py3-pip py3-virtualenv
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install requests
+                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/semgrep.json "Semgrep JSON Report"
+                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/owaspzap.json "ZAP Scan"
+                '''
+            }
+        }
         stage('Quality Gates') {
             agent {
                 label 'alpine'
@@ -123,25 +141,6 @@ pipeline {
                         // error("SEMGREP QG failed.")
                     }
                 }
-            }
-        }
-
-        stage('Import Scans to Defect Dojo') {
-            agent {
-                label 'alpine'
-            }
-            steps {
-                unstash 'semgrep-report'
-                unstash 'owaspzap-report'
-
-                sh '''
-                    apk update && apk add --no-cache python3 py3-pip py3-virtualenv
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install requests
-                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/semgrep.json "Semgrep JSON Report"
-                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/owaspzap.json "ZAP Scan"
-                '''
             }
         }
     }
