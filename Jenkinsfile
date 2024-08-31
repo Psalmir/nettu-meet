@@ -98,10 +98,10 @@ pipeline {
                     -H 'Content-Type: multipart/form-data' \
                     -F 'active=true' \
                     -F 'verified=true' \
-                    -F 'scan_type=Trivy Scan' \  # Измените на правильный тип сканирования
+                    -F 'scan_type=Trivy Scan' \
                     -F 'product_name=psalmir' \
-                    -F 'file=@reports/trivy.json' \  # Убедитесь, что путь к файлу правильный
-                    -F 'engagement=50'                       
+                    -F 'file=@reports/trivy.json' \
+                    -F 'engagement=50'
                     '''
                 }
             }
