@@ -2,7 +2,7 @@ pipeline {
     agent any
     environment {
         defectDojoApiKey = 'c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4'
-        defectDojoUrl = 'https://s410-exam.cyber-ed.space:8083/api/v2'
+        defectDojoUrl = 'https://s410-exam.cyber-ed.space:8083/api/v2/'
         semgrepReport = 'semgrep-report.json'
         trivyReport = 'trivy-report.json'
         dependencyTrackUrl = 'https://s410-exam.cyber-ed.space:8081/'
