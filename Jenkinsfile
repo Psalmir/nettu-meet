@@ -113,21 +113,22 @@ pipeline {
             steps {
                 unstash 'semgrep-report'
                 unstash 'owaspzap-report'
-
+        
                 script {
+                    echo "SEMGRPE_REPORT_MAX_ERROR: ${env.SEMGREP_REPORT_MAX_ERROR}"
+                    def maxErrorCount = env.SEMGREP_REPORT_MAX_ERROR ? env.SEMGREP_REPORT_MAX_ERROR.toInteger() : 0
+        
                     def xmlFileContent = readFile 'reports/owaspzap.json' 
                     def searchString = "<riskcode>3</riskcode>"
                     def lines = xmlFileContent.split('\n')
                     int zapErrorCount = lines.count { line -> line.contains(searchString) }
-
+        
                     echo "ZAP total error with risk 3 (High): ${zapErrorCount}"
-
-                    if (zapErrorCount > env.SEMGREP_REPORT_MAX_ERROR.toInteger()) {
+        
+                    if (zapErrorCount > maxErrorCount) {
                         echo "ZAP QG failed."
-                        // Для отладки не блочим
-                        // error("ZAP QG failed.")
                     }
-
+        
                     def jsonText = readFile 'reports/semgrep.json' 
                     def json = new groovy.json.JsonSlurper().parseText(jsonText)
                     int errorCount = 0
@@ -137,10 +138,8 @@ pipeline {
                         }
                     }
                     echo "SEMGREP error count: ${errorCount}"
-                    if (errorCount > env.SEMGREP_REPORT_MAX_ERROR.toInteger()) {
+                    if (errorCount > maxErrorCount) {
                         echo "SEMGREP QG failed."
-                        // Для отладки не блочим
-                        // error("SEMGREP QG failed.")
                     }
                 }
             }
