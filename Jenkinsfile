@@ -1,6 +1,19 @@
 pipeline {
     agent any
     stages {
+        stage('SAST with Semgrep') {
+            steps {
+                script {
+                    def results = sh(script: 'semgrep --config auto .', returnStdout: true)
+                    if (results.contains('ERROR')) {
+                        currentBuild.result = 'FAILURE'
+                        error("Semgrep found issues.")
+                    }
+                    // Отправка результатов в Defect Dojo (пример)
+                    // sh "curl -X POST -H 'Authorization: Token ${DEFECT_DOJO_TOKEN}' -d '${results}' ${DEFECT_DOJO_URL}/api/v2/import-scan/"
+                }
+            }
+        }
         stage('Run ZAP Scan') {
             agent {
                 label 'alpine'
