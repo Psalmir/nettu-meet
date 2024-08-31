@@ -106,54 +106,55 @@ pipeline {
         //         }
         //     }
         // }
-        stage('Defect Dojo') {
-            steps {
-                script {
-                    // Установка необходимых утилит
-                    sh 'apk add --no-cache curl jq'
-        
-                    // Создание тестового набора в Defect Dojo
-                    def createTestSuiteResponse = sh(
-                        script: """
-                        curl -k -X "POST" "${DEFECT_DOJO_URL}/api/v2/test_suites/" \
-                             -H "Authorization: Token ${DEFECT_DOJO_KEY}" \
-                             -H "Content-Type: application/json" \
-                             -d '{
-                                  "name": "Security Test Suite",
-                                  "description": "Automated security scan results"
-                                 }'
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    def testSuiteId = sh(script: "echo ${createTestSuiteResponse} | jq -r '.id'", returnStdout: true).trim()
-        
-                    if (!testSuiteId) {
-                        error "Failed to create test suite in Defect Dojo"
-                    }
-        
-                    echo "Test Suite ID: ${testSuiteId}"
-        
-                    // Функция для загрузки артефактов в Defect Dojo
-                    def uploadToDefectDojo = { file, scanType ->
-                        sh """
-                        curl -k -X "POST" "${DEFECT_DOJO_URL}/api/v2/import_scan/" \
-                             -H "Authorization: Token ${DEFECT_DOJO_KEY}" \
-                             -H "Content-Type: multipart/form-data" \
-                             -F "file=@${file}" \
-                             -F "test_type=${scanType}" \
-                             -F "test_suite=${testSuiteId}" \
-                             -F "scan_type=${scanType}"
-                        """
-                    }
-        
-                    // Пример использования функции для загрузки файлов
-                    uploadToDefectDojo('semgrep_report.json', 'Semgrep Scan')
-                    uploadToDefectDojo('zapout.json', 'OWASP ZAP Scan')
-                    uploadToDefectDojo('vulnerabilities.json', 'Dependency Track Scan')
-                    // uploadToDefectDojo('trivy-repo-report.json', 'Trivy Scan')
-                }
+stage('Defect Dojo') {
+    steps {
+        script {
+            // Установка необходимых утилит
+            sh 'apk add --no-cache curl jq'
+
+            // Создание тестового набора в Defect Dojo
+            def createTestSuiteResponse = sh(
+                script: """
+                curl -k -X "POST" "${DEFECT_DOJO_URL}/api/v2/test_suites/" \
+                     -H "Authorization: Token ${DEFECT_DOJO_KEY}" \
+                     -H "Content-Type: application/json" \
+                     -d '{
+                          "name": "Security Test Suite",
+                          "description": "Automated security scan results"
+                         }'
+                """,
+                returnStdout: true
+            ).trim()
+
+            def testSuiteId = sh(script: "echo '${createTestSuiteResponse}' | jq -r '.id'", returnStdout: true).trim()
+
+            if (!testSuiteId) {
+                error "Failed to create test suite in Defect Dojo"
             }
+
+            echo "Test Suite ID: ${testSuiteId}"
+
+            // Функция для загрузки артефактов в Defect Dojo
+            def uploadToDefectDojo = { file, scanType ->
+                sh """
+                curl -k -X "POST" "${DEFECT_DOJO_URL}/api/v2/import_scan/" \
+                     -H "Authorization: Token ${DEFECT_DOJO_KEY}" \
+                     -H "Content-Type: multipart/form-data" \
+                     -F "file=@${file}" \
+                     -F "test_type=${scanType}" \
+                     -F "test_suite=${testSuiteId}" \
+                     -F "scan_type=${scanType}"
+                """
+            }
+
+            // Пример использования функции для загрузки файлов
+            uploadToDefectDojo('semgrep_report.json', 'Semgrep Scan')
+            uploadToDefectDojo('zapout.json', 'OWASP ZAP Scan')
+            uploadToDefectDojo('vulnerabilities.json', 'Dependency Track Scan')
+            // uploadToDefectDojo('trivy-repo-report.json', 'Trivy Scan')
         }
+    }
+}
 
 
 
