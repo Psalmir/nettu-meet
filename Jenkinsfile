@@ -9,7 +9,7 @@ pipeline {
         dependencyTrackApiKey = 'odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl'
      }
     stages {
-        stage('SAST with Semgrep') {
+        stage('Semgrep') {
             agent {
                 label 'alpine'
             }
@@ -37,7 +37,7 @@ pipeline {
                 archiveArtifacts artifacts: "${semgrepReport}", allowEmptyArchive: true
             }
         } 
-        stage('Run ZAP Scan') {
+        stage('ZAP') {
             agent {
                 label 'alpine'
             }    
@@ -52,6 +52,40 @@ pipeline {
                 archiveArtifacts artifacts: 'zapsh-report.json', allowEmptyArchive: true         
             }            
         }
+        stage ('trivy') {
+          agent { 
+            label "dind" 
+          }
+          steps {
+            script {
+                sh '''
+                wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+                echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+                sudo apt-get update
+                sudo apt-get install trivy
+                mkdir reports/
+                cd server
+                trivy fs --format cyclonedx -o ../reports/sbom.json package-lock.json
+                trivy sbom -f json -o ../reports/trivy.json ../reports/sbom.json
+                '''
+                archiveArtifacts artifacts: 'reports/*', allowEmptyArchive: true
+                stash includes: 'reports/sbom*.json', name: 'sbom'
+              }
+          }
+      }
+      stage ('deptrack') {
+        agent { label "dind" }
+        steps {
+          unstash "sbom"
+          sh '''
+          ls reports/sbom.json
+          cd reports/
+          response_code = $(curl -vv --write-out %{http_code} -X "POST" https://s410-exam.cyber-ed.space:8081/api/v1/bom -H "Content-Type:multipart/form-data" -H "X-Api-Key:${dependencyTrackApiKey}" -F "autoCreate=true" -F "projectName=dronloko" -F "projectVersion=${currentBuild.number}" -F "bom=@bom.json")
+          echo $response_code
+          '''
+        }
+      }
+
         stage('Reports') {
             agent {
                 label 'alpine'
