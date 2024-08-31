@@ -9,6 +9,7 @@ pipeline {
         PROJECT_NAME = 'psalmir'
         PROJECT_VERSION = '1.0'
         PROJECT_DESCRIPTION = 'Exam'
+        PROJECT_UUID = '24e2a077-7195-4d91-8cd0-2552c0330aac'
      }
     stages {
         // stage('Semgrep') {
@@ -84,27 +85,27 @@ pipeline {
                 }
             }
         }
-        stage('Trivy') {
-            agent {
-                label 'dind'
-            }
-            steps {
-                script {
-                    sh '''
+        // stage('Trivy') {
+        //     agent {
+        //         label 'dind'
+        //     }
+        //     steps {
+        //         script {
+        //             sh '''
                     
-                    docker pull aquasec/trivy:0.54.1
+        //             docker pull aquasec/trivy:0.54.1
 
                     
-                    docker run --rm -v $(pwd):/project aquasec/trivy:0.54.1 repo --format json --output /project/trivy-repo-report.json /project
-                    '''
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'trivy-repo-report.json', allowEmptyArchive: true, caseSensitive: false, defaultExcludes: false, followSymlinks: false
-                }
-            }
-        }
+        //             docker run --rm -v $(pwd):/project aquasec/trivy:0.54.1 repo --format json --output /project/trivy-repo-report.json /project
+        //             '''
+        //         }
+        //     }
+        //     post {
+        //         always {
+        //             archiveArtifacts artifacts: 'trivy-repo-report.json', allowEmptyArchive: true, caseSensitive: false, defaultExcludes: false, followSymlinks: false
+        //         }
+        //     }
+        // }
         stage('Defect Dojo') {
             steps {
                 script {
