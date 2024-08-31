@@ -1,11 +1,10 @@
 pipeline {
     agent any
     environment {
-        defectDojoApiKey = 'c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4'
-        defectDojoUrl = 'https://s410-exam.cyber-ed.space:8083/api/v2/'
+        DEFECT_DOJO_KEY = 'c5b50032ffd2e0aa02e2ff56ac23f0e350af75b4'
+        DEFECT_DOJO_URL = 'https://s410-exam.cyber-ed.space:8083'
         semgrepReport = 'semgrep-report.json'
-        trivyReportDir = 'reports/'
-        DEPENDENCY_TRACK_URL = 'https://s410-exam.cyber-ed.space:8081/'
+        DEPENDENCY_TRACK_URL = 'https://s410-exam.cyber-ed.space:8081'
         DEPENDENCY_TRACK_API_KEY = 'odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl'
         PROJECT_NAME = 'psalmir'
         PROJECT_VERSION = '1.0'
@@ -85,18 +84,79 @@ pipeline {
                 }
             }
         }
-      stage('Trivy') {
-            agent { label 'dind' }
+        stage('Trivy') {
+            agent {
+                label 'dind'
+            }
             steps {
                 script {
                     sh '''
-                        docker pull aquasec/trivy:0.54.1
-                        docker run --rm -v $(pwd):/project aquasec/trivy:0.54.1 repo --format json --output /project/trivy_report.json /project
+                    
+                    docker pull aquasec/trivy:0.54.1
+
+                    
+                    docker run --rm -v $(pwd):/project aquasec/trivy:0.54.1 repo --format json --output /project/trivy-repo-report.json /project
                     '''
                 }
-                archiveArtifacts artifacts: 'trivy_report.json', allowEmptyArchive: true
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-repo-report.json', allowEmptyArchive: true, caseSensitive: false, defaultExcludes: false, followSymlinks: false
+                }
             }
         }
+        stage('Defect Dojo') {
+            steps {
+                script {
+                    // Установка необходимых утилит
+                    sh 'apk add --no-cache curl jq'
+        
+                    // Создание тестового набора в Defect Dojo
+                    def createTestSuiteResponse = sh(
+                        script: """
+                        curl -k -X "POST" "${DEFECT_DOJO_URL}/api/v2/test_suites/" \
+                             -H "Authorization: Token ${DEFECT_DOJO_KEY}" \
+                             -H "Content-Type: application/json" \
+                             -d '{
+                                  "name": "Security Test Suite",
+                                  "description": "Automated security scan results"
+                                 }'
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    def testSuiteId = sh(script: "echo ${createTestSuiteResponse} | jq -r '.id'", returnStdout: true).trim()
+        
+                    if (!testSuiteId) {
+                        error "Failed to create test suite in Defect Dojo"
+                    }
+        
+                    echo "Test Suite ID: ${testSuiteId}"
+        
+                    // Функция для загрузки артефактов в Defect Dojo
+                    def uploadToDefectDojo = { file, scanType ->
+                        sh """
+                        curl -k -X "POST" "${DEFECT_DOJO_URL}/api/v2/import_scan/" \
+                             -H "Authorization: Token ${DEFECT_DOJO_KEY}" \
+                             -H "Content-Type: multipart/form-data" \
+                             -F "file=@${file}" \
+                             -F "test_type=${scanType}" \
+                             -F "test_suite=${testSuiteId}" \
+                             -F "scan_type=${scanType}"
+                        """
+                    }
+        
+                    // Пример использования функции для загрузки файлов
+                    uploadToDefectDojo('semgrep_report.json', 'Semgrep Scan')
+                    uploadToDefectDojo('zapout.json', 'OWASP ZAP Scan')
+                    uploadToDefectDojo('vulnerabilities.json', 'Dependency Track Scan')
+                    // uploadToDefectDojo('trivy-repo-report.json', 'Trivy Scan')
+                }
+            }
+        }
+
+
+
+
         // stage('Quality Gate for SAST') {
         //     steps {
         //         script {
