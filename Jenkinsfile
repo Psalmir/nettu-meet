@@ -7,6 +7,9 @@ pipeline {
         trivyReportDir = 'reports/'
         dependencyTrackUrl = 'https://s410-exam.cyber-ed.space:8081/'
         dependencyTrackApiKey = 'odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl'
+        projectName = 'psalmir'
+        projectVersion = '1.0'
+        projectDescription = 'Exam'
      }
     stages {
         stage('Semgrep') {
@@ -42,37 +45,58 @@ pipeline {
                 stash name: 'zapsh-report', includes: 'zapsh-report.json'
             }            
         }
-        stage ('Trivy') {
-          agent { label "dind" }
+        stage ('SBOM') {
           steps {
             script {
                 sh '''
-                    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-                    echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-                    sudo apt-get update
-                    sudo apt-get install trivy
-                    mkdir -p ${trivyReportDir}
-                    cd server
-                    trivy fs --format cyclonedx -o ${trivyReportDir}sbom.json package-lock.json
-                    trivy sbom -f json -o ${trivyReportDir}trivy.json ${trivyReportDir}sbom.json
+                    curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b ./bin
+                    export PATH=$(pwd)/bin:$PATH
+                    syft dir:$(pwd) -o cyclonedx-xml=bom.xml
+                    curl -k -X "PUT" "${dependencyTrackUrl}/api/v1/project" \
+                         -H "X-API-Key: ${dependencyTrackApiKey}" \
+                         -H "Content-Type: application/json" \
+                         -d '{
+                              "name": "${projectName}",
+                              "version": "${projectVersion}",
+                              "description": "${projectDescription}"
+                             }'
+                    curl -k -X "POST" "${dependencyTrackUrl}/api/v1/bom" \
+                         -H "Content-Type: multipart/form-data" \
+                         -H "X-Api-Key: ${dependencyTrackApiKey}" \
+                         -F "autoCreate=true" \
+                         -F "projectName=${projectName}" \
+                         -F "projectVersion=${projectVersion}" \
+                         -F "bom=@bom.xml"
                 '''
-                archiveArtifacts artifacts: '${trivyReportDir}*', allowEmptyArchive: true
-                stash includes: '${trivyReportDir}sbom*.json', name: 'sbom'
             }
         }
       }
-    //   stage ('deptrack') {
-    //     agent { label "dind" }
-    //     steps {
-    //       unstash "sbom"
-    //       sh '''
-    //       ls reports/sbom.json
-    //       cd reports/
-    //       response_code = $(curl -vv --write-out %{http_code} -X "POST" https://s410-exam.cyber-ed.space:8081/api/v1/bom -H "Content-Type:multipart/form-data" -H "X-Api-Key:${dependencyTrackApiKey}" -F "autoCreate=true" -F "projectName=dronloko" -F "projectVersion=${currentBuild.number}" -F "bom=@bom.json")
-    //       echo $response_code
-    //       '''
-    //     }
-    //   }
+      stage('Trivy') {
+            agent { label 'dind' }
+            steps {
+                script {
+                    sh '''
+                        docker pull aquasec/trivy:0.54.1
+                        docker run --rm -v $(pwd):/project aquasec/trivy:0.54.1 repo --format json --output /project/trivy_report.json /project
+                    '''
+                }
+                archiveArtifacts artifacts: 'trivy_report.json', allowEmptyArchive: true
+            }
+        }
+        // stage('Quality Gate for SAST') {
+        //     steps {
+        //         script {
+        //             def highCount = sh(script: "grep -o '\"impact\": \"HIGH\"' ${semgrepReport} | wc -l", returnStdout: true).trim().toInteger()
+        //             def criticalCount = sh(script: "grep -o '\"impact\": \"CRITICAL\"' ${semgrepReport} | wc -l", returnStdout: true).trim().toInteger()
+                    
+        //             if (highCount > 5) {
+        //                 error "Semgrep: High severity issues found! (${highCount} high severity issues)"
+        //             }
+                    
+        //             if (criticalCount > 1) {
+        //                 error "Semgrep: Critical severity issues found! (${criticalCount} critical severity issues)"
+        //             }
+        //         }
         // stage('Upload Reports to DefectDojo') {
         //     agent {
         //         label 'alpine'
