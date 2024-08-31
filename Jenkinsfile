@@ -53,14 +53,15 @@ pipeline {
                 script {
                     sh '''
                     echo "Uploading SBOM to Dependency Track..."
-                    response_code=$(curl -k --silent --output /dev/null --write-out "%{http_code}" \
+                    ls -l reports/sbom.json  # Проверка наличия файла
+                    response_code=$(curl -v -k --silent --output /dev/null --write-out "%{http_code}" \
                     -X POST "${DEPTRACK_URL}/api/v1/bom" \
                     -H "Content-Type: multipart/form-data" \
                     -H "X-Api-Key: ${DEPTRACK_API_KEY}" \
                     -F "autoCreate=true" \
-                    -F "projectName=dronloko" \
+                    -F "projectName=psalmir" \
                     -F "projectVersion=1.0" \
-                    -F "bom=@sbom.json")
+                    -F "bom=@reports/sbom.json")
                     echo "Response Code: $response_code"
                     '''
                 }
