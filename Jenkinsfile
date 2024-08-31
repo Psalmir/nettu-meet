@@ -86,22 +86,63 @@ pipeline {
                 }
             }
         }
-        // stage('Import Scans to Defect Dojo') {
-        //     steps {
-        //         unstash 'trivy-report'
-        //         script {
-        //             sh '''
-        //             echo "Importing scans to Defect Dojo..."
-        //             curl -k -X POST "${DOJO_URL}/api/v2/import-scan/" \
-        //             -H "Authorization: Token ${DOJO_API_TOKEN}" \
-        //             -H "Content-Type: multipart/form-data" \
-        //             -F "scan_type=Trivy Scan" \
-        //             -F "file=@reports/trivy.json;type=application/json" \
-        //             -F "engagement=2" \
-        //             -F "product_name=dronloko"
-        //             '''
-        //         }
-        //     }
-        // }
+        stage('Quality Gates') {
+            agent {
+                label 'alpine'
+            }
+            steps {
+                unstash 'semgrep-report'
+                unstash 'owaspzap-report'
+
+                script {
+                    def xmlFileContent = readFile 'reports/owaspzap.json' 
+                    def searchString = "<riskcode>3</riskcode>"
+                    def lines = xmlFileContent.split('\n')
+                    int zapErrorCount = lines.count { line -> line.contains(searchString) }
+
+                    echo "ZAP total error with risk 3 (High): ${zapErrorCount}"
+
+                    if (zapErrorCount > env.SEMGREP_REPORT_MAX_ERROR.toInteger()) {
+                        echo "ZAP QG failed."
+                        // Для отладки не блочим
+                        // error("ZAP QG failed.")
+                    }
+
+                    def jsonText = readFile 'reports/semgrep.json' 
+                    def json = new groovy.json.JsonSlurper().parseText(jsonText)
+                    int errorCount = 0
+                    json.results.each { r ->
+                        if (r.extra.severity == "ERROR") {
+                            errorCount += 1;
+                        }
+                    }
+                    echo "SEMGREP error count: ${errorCount}"
+                    if (errorCount > env.SEMGREP_REPORT_MAX_ERROR.toInteger()) {
+                        echo "SEMGREP QG failed."
+                        // Для отладки не блочим
+                        // error("SEMGREP QG failed.")
+                    }
+                }
+            }
+        }
+
+        stage('Import Scans to Defect Dojo') {
+            agent {
+                label 'alpine'
+            }
+            steps {
+                unstash 'semgrep-report'
+                unstash 'owaspzap-report'
+
+                sh '''
+                    apk update && apk add --no-cache python3 py3-pip py3-virtualenv
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install requests
+                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/semgrep.json "Semgrep JSON Report"
+                    python -m dodjo ${DOJO_URL} ${DOJO_API_TOKEN} reports/owaspzap.json "ZAP Scan"
+                '''
+            }
+        }
     }
 }
