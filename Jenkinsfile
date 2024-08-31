@@ -25,108 +25,41 @@ pipeline {
                             pip install semgrep
                             . venv/bin/activate && semgrep --config=auto . --json > semgrep_report.json
                         '''
-                
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'semgrep_report.json', allowEmptyArchive: true
+                        archiveArtifacts artifacts: 'semgrep_report.json', allowEmptyArchive: true
                 }
             }
         } 
         stage('ZAP') {
             agent { label 'alpine' }    
-            steps {
-                script {
+            steps{
+                script{
                     sh '''
-                    apk add --no-cache openjdk11-jre-headless wget unzip
-                    wget https://github.com/zaproxy/zaproxy/releases/download/w2024-08-27/ZAP_WEEKLY_D-2024-08-27.zip
-                    unzip ZAP_WEEKLY_D-2024-08-27.zip -d zap
+                    docker run -v \$(pwd)/:/zap/wrk/:rw -t zaproxy/zap-stable zap-baseline.py -I -t https://s410-exam.cyber-ed.space:8084 -J zapout.json  
                     '''
-                    sh '''
-                    zap/ZAP_D-2024-08-27/zap.sh -cmd -quickurl ${STAND_URL} -quickout /home/jenkins/workspace/exam_timofeev_mv/zapout.json
-                    ls -l
-                    find . -name "*.json"
-                    '''
-                    archiveArtifacts artifacts: 'zapout.json', allowEmptyArchive: true, caseSensitive: false, defaultExcludes: false, followSymlinks: false
+                    archiveArtifacts artifacts: 'zapout.json', allowEmptyArchive: true
                 }
             }
         }
-        stage('SBOM') {
-            steps {
-                script {
-                    sh '''
-                    curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b ./bin
-                    export PATH=$(pwd)/bin:$PATH
-                    syft dir:$(pwd) -o cyclonedx-xml=bom.xml
-                    cat bom.xml
-                    '''
-                    def createProjectResponse = sh(
-                        script: """
-                        curl -k -X "PUT" "${DEPENDENCY_TRACK_URL}/api/v1/project" \
-                             -H "X-API-Key: ${DEPENDENCY_TRACK_API_KEY}" \
-                             -H "Content-Type: application/json" \
-                             -d '{
-                                  "name": "${PROJECT_NAME}",
-                                  "version": "${PROJECT_VERSION}",
-                                  "description": "${PROJECT_DESCRIPTION}"
-                                 }'
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    echo "Create Project Response: ${createProjectResponse}"
-        
-                    def uploadSbomResponse = sh(
-                        script: """
-                        curl -k -X "POST" "${DEPENDENCY_TRACK_URL}/api/v1/bom" \
-                             -H "Content-Type: multipart/form-data" \
-                             -H "X-Api-Key: ${DEPENDENCY_TRACK_API_KEY}" \
-                             -F "autoCreate=true" \
-                             -F "projectName=${PROJECT_NAME}" \
-                             -F "projectVersion=${PROJECT_VERSION}" \
-                             -F "bom=@bom.xml"
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    echo "Upload SBOM Response: ${uploadSbomResponse}"
-                }
-            }
-        }
+
         stage('Dependency Track') {
             steps {
-                script {
-                    // Установка jq
-                    sh 'apk add --no-cache jq'
-        
-                    // Получение UUID проекта
-                    def projectUUID = sh(
-                        script: """
-                        curl -k -X "GET" "${DEPENDENCY_TRACK_URL}/api/v1/project?name=${PROJECT_NAME}&version=${PROJECT_VERSION}" \
-                             -H "X-API-Key: ${DEPENDENCY_TRACK_API_KEY}" \
-                             -H "Content-Type: application/json" \
-                             | jq -r '.[0].uuid'
-                        """,
-                        returnStdout: true
-                    ).trim()
-                    
-                    if (!projectUUID) {
-                        error "Failed to get project UUID"
-                    }
-        
-                    // Получение уязвимостей и сохранение в файл
-                    sh """
-                    curl -k -X "GET" "${DEPENDENCY_TRACK_URL}/api/v1/finding/project/${projectUUID}" \
-                         -H "X-API-Key: ${DEPENDENCY_TRACK_API_KEY}" \
-                         -H "Content-Type: application/json" \
-                         -o vulnerabilities.json
-                    """
-                    
-                    echo "Vulnerabilities saved to vulnerabilities.json"
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'vulnerabilities.json', allowEmptyArchive: true
+                script{
+                    sh '''
+                    curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+                    syft dir:$(pwd) -o cyclonedx-xml@1.5 > sbom.xml
+
+                    curl -k -X "PUT" "https://s410-exam.cyber-ed.space:8081/api/v1/bom" \
+                    -H 'Content-Type: application/json' \
+                    -H 'X-API-Key: odt_SfCq7Csub3peq7Y6lSlQy5Ngp9sSYpJl' \
+                    -d '{
+                        "project": "e24b8a18-0695-4ec0-b7fe-25e6e14b22d6",
+                        "bom": {
+                            "format": "CycloneDX",
+                            "data": "'$(sbom.json)'"
+                                }
+                        }'
+                    '''
+                    archiveArtifacts artifacts: 'sbom.json', allowEmptyArchive: true
                 }
             }
         }
@@ -193,10 +126,10 @@ pipeline {
                         }
 
                         // Пример использования функции для загрузки файлов
-                        uploadToDefectDojo('semgrep_report.json', 'Semgrep Scan')
-                        uploadToDefectDojo('zapout.json', 'OWASP ZAP Scan')
-                        uploadToDefectDojo('vulnerabilities.json', 'Dependency Track Scan')
-                        // uploadToDefectDojo('trivy-repo-report.json', 'Trivy Scan')
+                        uploadToDefectDojo('semgrep_report.json', 'Semgrep')
+                        uploadToDefectDojo('zapout.json', 'ZAP')
+                        uploadToDefectDojo('sbom.json', 'Dependency Track')
+                        // uploadToDefectDojo('trivy-repo-report.json', 'Trivy')
                     }
                 }
             }
