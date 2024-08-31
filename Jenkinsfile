@@ -52,55 +52,44 @@ pipeline {
                 archiveArtifacts artifacts: 'zapsh-report.json', allowEmptyArchive: true         
             }            
         }
-        // stage('SCA') {
-        //     agent {
-        //         label 'trivy'
-        //     }
-        //     when {
-        //         expression { true }
-        //     }
-
-        //     steps {
-        //         sh '''
-        //             cd server
-        //             docker build . -t ${DOCKER_IMAGE_NAME} -fDockerfile
-        //             #echo '192.168.5.13 harbor.cyber-ed.labs' >> /etc/hosts
-        //             #sudo curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b /usr/local/bin
-        //             #curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-        //             docker image ls
-        //             #sudo grype docker:podkatilovas/pygoat:113 -o table >> ${SCA_REPORT}
-        //             ls -lt
-        //         '''
-        //         stash name: 'semgrep-report', includes: "${SCA_REPORT}"
-        //         archiveArtifacts artifacts: "${SCA_REPORT}", allowEmptyArchive: true
-        //     }
-        // } 
-
-        stage('Upload Reports to DefectDojo') {
+        stage('Reports') {
             agent {
                 label 'alpine'
-            } 
+            }    
             steps {
-                script {
-                    sh """
-                        ls -lth 
-                        curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" \
-                        -F "engagement=null" \
-                        -F "scan_type=Semgrep" \
-                        -F "file=@${semgrepReport}" \
-                        ${defectDojoUrl}import-scan/
-                    """
+                sh 'cp ./reports/* ./'
+                sh 'ls -lt'
+                // stash name: 'sbom', includes: 'sbom.json'
+                stash name: 'semgrep-report', includes: "${semgrepReport}"
+                stash name: 'zapsh-report', includes: 'zapsh-report.json'
+            }            
+        }
 
-                    sh """
-                        ls -lth 
-                        curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" \
-                        -F "engagement=null" \
-                        -F "scan_type=ZAP" \
-                        -F "file=@${zapshReport}" \
-                        ${defectDojoUrl}import-scan/
-                    """
-                }
-            }
-        }      
+        // stage('Upload Reports to DefectDojo') {
+        //     agent {
+        //         label 'alpine'
+        //     } 
+        //     steps {
+        //         script {
+        //             sh """
+        //                 ls -lth 
+        //                 curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" \
+        //                 -F "engagement=null" \
+        //                 -F "scan_type=Semgrep" \
+        //                 -F "file=@${semgrepReport}" \
+        //                 ${defectDojoUrl}import-scan/
+        //             """
+
+        //             sh """
+        //                 ls -lth 
+        //                 curl -k -X POST -H "Authorization: Token ${defectDojoApiKey}" \
+        //                 -F "engagement=null" \
+        //                 -F "scan_type=ZAP" \
+        //                 -F "file=@${zapshReport}" \
+        //                 ${defectDojoUrl}import-scan/
+        //             """
+        //         }
+        //     }
+        // }      
     }
 }
