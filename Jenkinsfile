@@ -54,7 +54,7 @@ pipeline {
                 archiveArtifacts artifacts: 'zapsh-report.json', allowEmptyArchive: true         
             }            
         }      
-    }
 }
+
 
 
