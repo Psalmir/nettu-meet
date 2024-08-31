@@ -85,6 +85,44 @@ pipeline {
                 }
             }
         }
+        stage('Dependency Track') {
+            steps {
+                script {
+                    // Установка jq
+                    sh 'apk add --no-cache jq'
+        
+                    // Получение UUID проекта
+                    def projectUUID = sh(
+                        script: """
+                        curl -k -X "GET" "${DEPENDENCY_TRACK_URL}/api/v1/project?name=${PROJECT_NAME}&version=${PROJECT_VERSION}" \
+                             -H "X-API-Key: ${DEPENDENCY_TRACK_API_KEY}" \
+                             -H "Content-Type: application/json" \
+                             | jq -r '.[0].uuid'
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!projectUUID) {
+                        error "Failed to get project UUID"
+                    }
+        
+                    // Получение уязвимостей и сохранение в файл
+                    sh """
+                    curl -k -X "GET" "${DEPENDENCY_TRACK_URL}/api/v1/finding/project/${projectUUID}" \
+                         -H "X-API-Key: ${DEPENDENCY_TRACK_API_KEY}" \
+                         -H "Content-Type: application/json" \
+                         -o vulnerabilities.json
+                    """
+                    
+                    echo "Vulnerabilities saved to vulnerabilities.json"
+                }
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'vulnerabilities.json', allowEmptyArchive: true
+                }
+            }
+        }
         // stage('Trivy') {
         //     agent {
         //         label 'dind'
@@ -106,9 +144,9 @@ pipeline {
         //         }
         //     }
         // }
-stage('Defect Dojo') {
-    steps {
-        script {
+            stage('Defect Dojo') {
+                steps {
+                    script {
             // Установка необходимых утилит
             sh 'apk add --no-cache curl jq'
 
